@@ -1,0 +1,8 @@
+.venv
+
+datasets
+embeddings
+
+__pycache__
+
+.env
