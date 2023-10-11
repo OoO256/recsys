@@ -1,19 +1,20 @@
+import gc
 import itertools
 from time import sleep
 
 import lightning.pytorch as pl
 import pandas as pd
+import torch
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.loggers import WandbLogger
+from lightning.pytorch.callbacks.lr_monitor import LearningRateMonitor
+from lightning.pytorch.loggers import WandbLogger
 from tabulate import tabulate
 
 from datasets.movie import MovieLensDataModule
+from predictors.collaborative import NMF, GeneralMatrixFactorizer, MultiLayerPerceptron
 from predictors.demographic import AverageRatingPredictor, WeightedRatingPredictor
-from predictors.matrix_factorizers import SimpleMatrixFactorizer
 from utils.split_ratings import split_ratings
-
-import gc
-import torch
+import wandb
 
 BECHMARK_DFAULT_PATH = "/home/yonguk/recsys/benchmarks/benchmark.txt"
 
@@ -30,11 +31,11 @@ def run_benchmark(path_benchmark=BECHMARK_DFAULT_PATH):
     somelists = [
         [False],
         [
-            # ("random", {}),
+            ("random", {}),
             # ("time", {}),
             # ("user", {"warm_only": False}),
             # ("user", {"warm_only": True, "min_ratings": 5}),
-            ("user", {"warm_only": True, "min_ratings": 20}),
+            # ("user", {"warm_only": True, "min_ratings": 20}),
         ],
     ]
     result = {
@@ -66,16 +67,15 @@ def run_benchmark(path_benchmark=BECHMARK_DFAULT_PATH):
             result[predictor.__class__.__name__].append(round_dict(eval))
             print(f"{predictor.__class__.__name__} eval: {round_dict(eval)}")
 
-        # benchmark matrix factorization predictors
-        if small:
-            dataset = MovieLensDataModule(
-                small=small,
-                split_by=split_by,
-                split_kwargs=split_kwargs,
-                batch_size=1024 if small else 8 * 1024,
-            )
+        # benchmark collaborative predictors
         for module in [
-            SimpleMatrixFactorizer(dataset.max_user_id + 1, dataset.max_movie_id + 1)
+            GeneralMatrixFactorizer(
+                dataset.max_user_id + 1, dataset.max_movie_id + 1, learning_rate=0.01
+            ),
+            MultiLayerPerceptron(
+                dataset.max_user_id + 1, dataset.max_movie_id + 1, learning_rate=0.01
+            ),
+            NMF(dataset.max_user_id + 1, dataset.max_movie_id + 1, learning_rate=0.01),
         ]:
             wandb_logger = WandbLogger(
                 f"benchmark/{module.__class__.__name__}/{'small' if small else 'large'}_{split_by}_{split_kwargs}",
@@ -83,8 +83,11 @@ def run_benchmark(path_benchmark=BECHMARK_DFAULT_PATH):
                 log_model=True,
             )
             trainer = pl.Trainer(
-                max_epochs=100 if small else 10,
-                callbacks=[EarlyStopping(monitor="val/loss")],
+                max_epochs=100,
+                callbacks=[
+                    EarlyStopping(monitor="val/loss", patience=3, min_delta=0.001),
+                    LearningRateMonitor(logging_interval="step"),
+                ],
                 logger=wandb_logger,
             )
             trainer.fit(module, datamodule=dataset)
@@ -115,6 +118,8 @@ def run_benchmark(path_benchmark=BECHMARK_DFAULT_PATH):
     print(result_str)
     with open(BECHMARK_DFAULT_PATH, "w") as f:
         f.write(result_str)
+
+    wandb.finish()
 
     return result, result_str
 
