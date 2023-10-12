@@ -77,10 +77,12 @@ def run_benchmark(path_benchmark=BECHMARK_DFAULT_PATH):
             ),
             NMF(dataset.max_user_id + 1, dataset.max_movie_id + 1, learning_rate=0.01),
         ]:
+            wandb.finish()
             wandb_logger = WandbLogger(
                 f"benchmark/{module.__class__.__name__}/{'small' if small else 'large'}_{split_by}_{split_kwargs}",
                 project="recsys",
                 log_model=True,
+                reinit=True,
             )
             trainer = pl.Trainer(
                 max_epochs=100,
@@ -99,6 +101,7 @@ def run_benchmark(path_benchmark=BECHMARK_DFAULT_PATH):
             result[module.__class__.__name__].append(round_dict(eval))
             print(f"{module.__class__.__name__} eval: {round_dict(eval)}")
 
+            del wandb_logger
             gc.collect()
             torch.cuda.empty_cache()
 
