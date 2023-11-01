@@ -146,7 +146,7 @@ class MultiLayerPerceptron(BaseCollaborativeFilter):
         return self.out(last_latent).squeeze()
 
 
-class NMF(BaseCollaborativeFilter):
+class NeuralMatrixFactorizer(BaseCollaborativeFilter):
     def __init__(
         self,
         num_users,
@@ -155,7 +155,9 @@ class NMF(BaseCollaborativeFilter):
         mlp_num_layers=3,
         learning_rate=0.01,
     ):
-        super(NMF, self).__init__(num_users, num_items, factor, learning_rate)
+        super(NeuralMatrixFactorizer, self).__init__(
+            num_users, num_items, factor, learning_rate
+        )
 
         self.gmf_model = GeneralMatrixFactorizer(
             num_users, num_items, factor, learning_rate
