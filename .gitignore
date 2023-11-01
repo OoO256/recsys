@@ -1,4 +1,8 @@
 .venv
+.vscode
+wandb
+recsys
+benchmarks
 
 datasets
 embeddings
