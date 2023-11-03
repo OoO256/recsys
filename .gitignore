@@ -2,7 +2,6 @@
 .vscode
 wandb
 recsys
-benchmarks
 
 datasets
 embeddings
