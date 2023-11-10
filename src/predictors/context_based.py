@@ -12,6 +12,8 @@ import itertools
 import scipy
 import random
 
+EMBEDDING_DIR = os.path.join(os.environ.get("WORKSPACE_FOLDER"), "embeddings")
+
 
 def normalize_rating(rating):
     # [0.5, 5] => [-1, 1]
@@ -68,11 +70,10 @@ class ContentVectorBased(Predictor):
             )
 
     def fit(self, ratings, movies):
-        if os.path.exists(
-            f"/home/yonguk/recsys/embeddings/{self.vectorizing_method}.npy"
-        ):
+        embedding_path = os.path.join(EMBEDDING_DIR, f"{self.vectorizing_method}.npy")
+        if os.path.exists(embedding_path):
             self.content_vectors = np.load(
-                f"/home/yonguk/recsys/embeddings/{self.vectorizing_method}.npy",
+                embedding_path,
                 allow_pickle=True,
             )
 
@@ -81,7 +82,7 @@ class ContentVectorBased(Predictor):
         else:
             self.content_vectors = self.vectorize(movies)
             np.save(
-                f"/home/yonguk/recsys/embeddings/{self.vectorizing_method}.npy",
+                embedding_path,
                 self.content_vectors,
                 allow_pickle=True,
             )

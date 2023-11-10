@@ -23,7 +23,7 @@ from predictors.demographic import AverageRatingPredictor, WeightedRatingPredict
 import wandb
 import os
 
-BECHMARK_DIR = "/home/yonguk/recsys/benchmarks"
+BECHMARK_DIR = os.path.join(os.environ.get("WORKSPACE_FOLDER"), "benchmarks")
 
 
 def tabulate_result(d: dict):

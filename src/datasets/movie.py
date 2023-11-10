@@ -4,6 +4,7 @@ import torch
 import lightning.pytorch as pl
 from typing import Optional
 from utils.split_ratings import split_ratings
+import os
 
 
 class MovieLensDataModule(pl.LightningDataModule):
@@ -33,7 +34,9 @@ class MovieLensDataModule(pl.LightningDataModule):
         ratings_small.csv: The subset of 100,000 ratings from 700 users on 9,000 movies.
         """
         super().__init__()
-        self.dirname = "/home/yonguk/recsys/datasets/movielens/kaggle"
+        self.dirname = os.path.join(
+            os.environ.get("WORKSPACE_FOLDER"), "/datasets/movielens/kaggle"
+        )
         self.small = small
         self._read_csv()
         self.max_user_id = self.ratings_df["userId"].max()
