@@ -1,6 +1,7 @@
 .venv
 .vscode
 wandb
+lightning_logs
 recsys
 
 datasets

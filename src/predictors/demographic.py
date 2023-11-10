@@ -5,7 +5,7 @@ class AverageRatingPredictor(Predictor):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-    def fit(self, ratings_train):
+    def fit(self, ratings_train, moives, *args, **kwargs):
         self.avg_rating = ratings_train.groupby("movieId")["rating"].mean()
 
     def predict(self, ratings_test):
@@ -22,7 +22,7 @@ class WeightedRatingPredictor(Predictor):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-    def fit(self, ratings_train):
+    def fit(self, ratings_train, moives, *args, **kwargs):
         rating_avg = ratings_train["rating"].mean()
         rating_counts = ratings_train.groupby("movieId")["rating"].count()
         min_rate_count = rating_counts.quantile(0.9)

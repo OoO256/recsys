@@ -11,15 +11,15 @@ from lightning.pytorch.loggers import WandbLogger
 from tabulate import tabulate
 
 from datasets.movie import MovieLensDataModule
-from predictors.base import ConstantPredictor
-from predictors.collaborative import (
+from predictors.base import ConstantPredictor, Predictor
+from lightning_modules.collaborative import (
     NeuralMatrixFactorizer,
     GeneralMatrixFactorizer,
     MultiLayerPerceptron,
+    BaseLightningModule,
 )
 from predictors.context_based import ContentVectorBased
 from predictors.demographic import AverageRatingPredictor, WeightedRatingPredictor
-from utils.split_ratings import split_ratings
 import wandb
 
 BECHMARK_DFAULT_PATH = "/home/yonguk/recsys/benchmarks/benchmark.txt"
@@ -35,16 +35,16 @@ def round_dict(d: dict, n: int = 3):
 
 def run_benchmark(path_benchmark=BECHMARK_DFAULT_PATH):
     somelists = [
-        [True, False],
+        [True],
         [
             ("random", {}),
-            ("time", {}),
-            ("user", {"warm_only": False}),
-            ("user", {"warm_only": True, "min_ratings": 5}),
-            ("user", {"warm_only": True, "min_ratings": 20}),
+            # ("time", {}),
+            # ("user", {"warm_only": False}),
+            # ("user", {"warm_only": True, "min_ratings": 5}),
+            # ("user", {"warm_only": True, "min_ratings": 20}),
         ],
     ]
-    result = {
+    benchmark_table = {
         "Dataset": [],
     }
 
@@ -56,84 +56,70 @@ def run_benchmark(path_benchmark=BECHMARK_DFAULT_PATH):
             batch_size=1024 if small else 8 * 1024,
         )
         data_module.setup("fit")
-
-        result["Dataset"].append(
+        desc_dataset = (
             f"{'small' if small else 'large'}, split_by {split_by}, {split_kwargs}"
         )
 
+        benchmark_table["Dataset"].append(desc_dataset)
+
         # benchmark demographic predictors
-        for predictor in [
+        for method in [
             AverageRatingPredictor(),
             WeightedRatingPredictor(),
             ConstantPredictor(),
-        ]:
-            predictor.fit(data_module.train)
-            pred = predictor.predict(data_module.test)
-            eval = predictor.evaluate(data_module.test, pred)
-
-            result[predictor.desc] = result.get(predictor.desc, [])
-            result[predictor.desc].append(round_dict(eval))
-            print(f"{predictor.desc} eval: {round_dict(eval)}")
-
-        # content based
-        for predictor in [
             ContentVectorBased("tf-idf", "tf-idf"),
             ContentVectorBased("word2vec", "word2vec"),
             ContentVectorBased("gpt", "gpt"),
-        ]:
-            predictor.fit(data_module.train, data_module.movies_df)
-            pred = predictor.predict(data_module.test)
-            eval = predictor.evaluate(data_module.test, pred)
-
-            result[predictor.desc] = result.get(predictor.desc, [])
-            result[predictor.desc].append(round_dict(eval))
-            print(f"{predictor.desc} eval: {round_dict(eval)}")
-
-            sm = predictor.get_similar_movies("The Dark Knight Rises")
-            print(sm[["title", "overview", "vote_average"]])
-
-        # benchmark collaborative predictors
-        for module in [
             GeneralMatrixFactorizer(
-                dataset.max_user_id + 1, dataset.max_movie_id + 1, learning_rate=0.01
+                data_module.max_user_id + 1, data_module.max_movie_id + 1
             ),
             MultiLayerPerceptron(
-                dataset.max_user_id + 1, dataset.max_movie_id + 1, learning_rate=0.01
+                data_module.max_user_id + 1, data_module.max_movie_id + 1
             ),
             NeuralMatrixFactorizer(
-                dataset.max_user_id + 1, dataset.max_movie_id + 1, learning_rate=0.01
+                data_module.max_user_id + 1, data_module.max_movie_id + 1
             ),
         ]:
-            wandb.finish()
-            wandb_logger = WandbLogger(
-                f"benchmark/{module.__class__.__name__}/{'small' if small else 'large'}_{split_by}_{split_kwargs}",
-                project="recsys",
-                log_model=True,
-                reinit=True,
-            )
-            trainer = pl.Trainer(
-                max_epochs=100,
-                callbacks=[
-                    EarlyStopping(monitor="val/loss", patience=3, min_delta=0.001),
-                    LearningRateMonitor(logging_interval="step"),
-                ],
-                logger=wandb_logger,
-            )
-            trainer.fit(module, datamodule=data_module)
-            eval = trainer.test(module, datamodule=data_module)[-1]
+            if isinstance(method, Predictor):
+                method.fit(data_module.train, data_module.movies_df)
+                pred = method.predict(data_module.test)
+                result = method.evaluate(data_module.test, pred)
+            elif isinstance(method, BaseLightningModule):
+                wandb.finish()
+                wandb_logger = WandbLogger(
+                    f"benchmark/{method.__class__.__name__}/{desc_dataset}",
+                    project="recsys",
+                    log_model=True,
+                    reinit=True,
+                )
+                trainer = pl.Trainer(
+                    max_epochs=100,
+                    callbacks=[
+                        EarlyStopping(monitor="val/loss", patience=3, min_delta=0.001),
+                        LearningRateMonitor(logging_interval="step"),
+                    ],
+                    # logger=wandb_logger,
+                )
+                trainer.fit(method, datamodule=data_module)
+                result = trainer.test(method, datamodule=data_module)[-1]
 
-            result[module.__class__.__name__] = result.get(
-                module.__class__.__name__, []
-            )
-            result[module.__class__.__name__].append(round_dict(eval))
-            print(f"{module.__class__.__name__} eval: {round_dict(eval)}")
+                del wandb_logger
+                gc.collect()
+                torch.cuda.empty_cache()
 
-            del wandb_logger
-            gc.collect()
-            torch.cuda.empty_cache()
+            else:
+                raise ValueError(f"predictor should be Predictor or LightningModule")
+
+            benchmark_table[method.desc] = benchmark_table.get(method.desc, [])
+            benchmark_table[method.desc].append(round_dict(result))
+            print(f"{method.desc} eval: {round_dict(result)}")
+
+            if isinstance(method, ContentVectorBased):
+                sm = method.get_similar_movies("The Dark Knight Rises")
+                print(sm[["title", "overview", "vote_average"]])
 
         # print and save result
-        result_str = tabulate_result(result)
+        result_str = tabulate_result(benchmark_table)
         print(result_str)
         with open(BECHMARK_DFAULT_PATH, "w") as f:
             f.write(result_str)
@@ -142,14 +128,9 @@ def run_benchmark(path_benchmark=BECHMARK_DFAULT_PATH):
         del data_module
         sleep(10)
 
-    result_str = tabulate_result(result)
-    print(result_str)
-    with open(BECHMARK_DFAULT_PATH, "w") as f:
-        f.write(result_str)
-
     wandb.finish()
 
-    return result, result_str
+    return benchmark_table, result_str
 
 
 if __name__ == "__main__":

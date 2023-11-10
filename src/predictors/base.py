@@ -8,7 +8,7 @@ class Predictor(ABC):
         self.desc = desc if desc is not None else self.__class__.__name__
 
     @abstractmethod
-    def fit(self, ratings_train, *args, **kwargs):
+    def fit(self, ratings_train, moives, *args, **kwargs):
         pass
 
     @abstractmethod
@@ -51,10 +51,10 @@ class ConstantPredictor(Predictor):
         super().__init__(desc)
         self.constant_rating = constant_rating
 
-    def fit(self, ratings_train):
+    def fit(self, ratings_train, moives, *args, **kwargs):
         pass
 
     def predict(self, ratings_test):
-        pred = ratings_test
+        pred = ratings_test.copy()
         pred["rating_pred"] = self.constant_rating
         return pred

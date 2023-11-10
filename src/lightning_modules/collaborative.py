@@ -4,40 +4,17 @@ from torch.optim import Adam
 from torch import nn
 
 
-class BaseCollaborativeFilter(pl.LightningModule):
+class BaseLightningModule(pl.LightningModule):
     def __init__(
         self,
-        num_users,
-        num_items,
-        embedding_dim=16,
         learning_rate=0.01,
     ):
-        super(BaseCollaborativeFilter, self).__init__()
+        super(BaseLightningModule, self).__init__()
         self.save_hyperparameters()
-
-        self.user_embedding = torch.nn.Embedding(num_users, embedding_dim)
-        self.item_embedding = torch.nn.Embedding(num_items, embedding_dim)
-
         self.learning_rate = learning_rate
 
-    def forward(self, user_indices, item_indices):
-        raise NotImplementedError()
-
     def calculate_loss_and_metrics(self, batch, prefix=""):
-        user_indices = batch["userId"]
-        item_indices = batch["movieId"]
-        ratings = batch["rating"]
-        preds = self.forward(user_indices, item_indices)
-        ratings = ratings.to(preds.dtype)
-        mae = torch.nn.functional.l1_loss(preds, ratings)
-        rmse = torch.sqrt(torch.nn.functional.mse_loss(preds, ratings))
-        loss = rmse
-        lr = self.optimizer.param_groups[0]["lr"]
-        return loss, {
-            prefix + "mae": mae,
-            prefix + "rmse": rmse,
-            prefix + "lr": lr,
-        }
+        raise NotImplementedError()
 
     def training_step(self, batch, batch_idx):
         loss, metrics = self.calculate_loss_and_metrics(batch, prefix="train/")
@@ -87,6 +64,52 @@ class BaseCollaborativeFilter(pl.LightningModule):
                 "strict": True,
             },
         }
+
+    @property
+    def desc(self):
+        return str(self._hparams)
+
+
+class BaseCollaborativeFilter(BaseLightningModule):
+    def __init__(
+        self,
+        num_users,
+        num_items,
+        embedding_dim=16,
+        learning_rate=0.01,
+    ):
+        super(BaseCollaborativeFilter, self).__init__(learning_rate)
+        self.save_hyperparameters()
+
+        self.user_embedding = torch.nn.Embedding(num_users, embedding_dim)
+        self.item_embedding = torch.nn.Embedding(num_items, embedding_dim)
+
+    def calculate_loss_and_metrics(self, batch, prefix=""):
+        user_indices = batch["userId"]
+        item_indices = batch["movieId"]
+        ratings = batch["rating"]
+        preds = self.forward(user_indices, item_indices)
+        ratings = ratings.to(preds.dtype)
+        mae = torch.nn.functional.l1_loss(preds, ratings)
+        rmse = torch.sqrt(torch.nn.functional.mse_loss(preds, ratings))
+        loss = rmse
+        lr = self.optimizer.param_groups[0]["lr"]
+        return loss, {
+            prefix + "mae": mae,
+            prefix + "rmse": rmse,
+            prefix + "lr": lr,
+        }
+
+    @property
+    def desc(self):
+        # remove num_users and num_items from desc
+        return str(
+            {
+                k: v
+                for k, v in self._hparams.items()
+                if k not in ["num_users", "num_items"]
+            }
+        )
 
 
 class GeneralMatrixFactorizer(BaseCollaborativeFilter):
