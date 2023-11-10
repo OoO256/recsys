@@ -67,7 +67,7 @@ class BaseLightningModule(pl.LightningModule):
 
     @property
     def desc(self):
-        return str(self._hparams)
+        return self.__class__.__name__ + "_" + str(self._hparams)
 
 
 class BaseCollaborativeFilter(BaseLightningModule):
@@ -103,12 +103,16 @@ class BaseCollaborativeFilter(BaseLightningModule):
     @property
     def desc(self):
         # remove num_users and num_items from desc
-        return str(
-            {
-                k: v
-                for k, v in self._hparams.items()
-                if k not in ["num_users", "num_items"]
-            }
+        return (
+            self.__class__.__name__
+            + "_"
+            + str(
+                {
+                    k: v
+                    for k, v in self._hparams.items()
+                    if k not in ["num_users", "num_items"]
+                }
+            )
         )
 
 
