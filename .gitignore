@@ -5,6 +5,7 @@ lightning_logs
 recsys
 
 datasets
+!src/datasets
 embeddings
 
 __pycache__
